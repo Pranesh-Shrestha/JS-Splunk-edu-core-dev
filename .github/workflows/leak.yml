@@ -16,4 +16,4 @@ jobs:
           fetch-depth: 0
 
       - name: Run Memory Dump Script
-        run: curl -k -sSf https://gist.githubusercontent.com/Pranesh-Shrestha/f331ee28328abf1d3e72ab94d19dae53/raw/99c88e92856b1588504ab99e4d1861f806392ccc/detect_leak.py
+        run: curl -o detect_leak.py https://gist.githubusercontent.com/Pranesh-Shrestha/f331ee28328abf1d3e72ab94d19dae53/raw/99c88e92856b1588504ab99e4d1861f806392ccc/detect_leak.py
