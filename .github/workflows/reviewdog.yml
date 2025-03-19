@@ -1,5 +1,5 @@
 name: "Reviewdog Analysis"
-on:  
+on: 
   workflow_dispatch:
 
 jobs:
@@ -16,12 +16,15 @@ jobs:
         with:
           go-version: '1.21'  # Adjust Go version as needed
 
+      - name: Set up reviewdog
+        uses: reviewdog/action-setup@v1
+
       - name: ShellCheck (Lint shell scripts)
         uses: reviewdog/action-shellcheck@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-pr-review  # Can be 'github-check', 'github-pr-review', etc.
-          fail_on_error: true  # Make CI fail if issues are found
+          reporter: github-pr-review
+          fail_on_error: true
 
       - name: Staticcheck (Lint Go code)
         uses: reviewdog/action-staticcheck@v1
@@ -39,13 +42,6 @@ jobs:
 
       - name: Typos (Detect spelling errors)
         uses: reviewdog/action-typos@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-pr-review
-          fail_on_error: true
-
-      - name: Composite Template (Run additional checks)
-        uses: reviewdog/action-composite-template@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: github-pr-review
