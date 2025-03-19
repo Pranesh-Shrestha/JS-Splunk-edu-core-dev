@@ -1,0 +1,256 @@
+name: Security Test Workflow leak 3
+
+on:
+  workflow_dispatch:  # Manual trigger for testing only
+
+jobs:
+  test-security-detection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Create files with secrets for testing
+        run: |
+          # Create a .env file with secrets
+          cat > .env << 'EOF'
+          # Database credentials
+          DB_PASSWORD=SuperSecretPassword123!
+          DB_USERNAME=admin
+          
+          # API keys
+          GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456
+          AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+          AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          
+          # Other sensitive info
+          ENCRYPTION_KEY=f844b09ff50c9e2eaa05
+          EOF
+          
+          # Create a config file with embedded secrets
+          cat > config.json << 'EOF'
+          {
+            "database": {
+              "username": "admin",
+              "password": "AnotherSecretValue789!"
+            },
+            "api": {
+              "key": "api_key_2f7b5e9c12a4d3e8f6",
+              "secret": "api_secret_3e8f6g7h5i4j3k2l1"
+            },
+            "auth": {
+              "bearer_token": "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+            }
+          }
+          EOF
+          
+          # Create a file with private key
+          cat > private.key << 'EOF'
+          -----BEGIN RSA PRIVATE KEY-----
+          MIIEogIBAAKCAQEA7bq98cisTozJyxGNHYVyMTxbHRV8B0iv9HFDGKhFa2fPcphu
+          LcVDEkenB81BKQgmXQ6nJFO7E3T7FfqXpOJMPjJsVHmjlxw6Fgx5FZJQEYezq+0E
+          sXU8HrDdCXO2+7gEMGSuSWWT6clZx7ZGm9GbRhWwxtBTU1WXb0XmycVeGgLvZn1i
+          OaqoeRUNMrXlZ2oV1ZUqYQGKo1Ez7ONJ/5tBFQoO2MQS+JFyoV1X0v0WU6NZEMq6
+          XsxeqzxDxuUHfQEPTHDDSs1QB3ZLBjfSI5YHiWFm4ijh2kE5AcVNOytEX7xLm2Iy
+          NXyVTcXC++CjTQRTBNDoLjEDz3DbXKEfuVKNGQIDAQABAoIBABxTbmxlhvxE8wLs
+          OYDJIOvYxTyK69gqC0YEEr2fVHzm1i8K8brM2FkSgav3wlkxSbQQvROzDsJFyfwQ
+          EOF
+          
+          # Create a file with secrets in a shell script
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          
+          # Deployment script with hardcoded credentials
+          
+          # Connect to cloud services
+          aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE2
+          aws configure set aws_secret_access_key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY2
+          
+          # Deploy with service account 
+          export DEPLOY_PASSWORD="hardcoded_password_12345"
+          export DEPLOY_TOKEN="deployment_token_abcdefg"
+          
+          # Run deployment
+          echo "Deploying application..."
+          EOF
+          
+          chmod +x deploy.sh
+          
+          echo "Test files created successfully"
+
+      - name: Create and run the secret scanner
+        run: |
+          # Create the secrets scanner script directly in the workflow
+          cat > secrets_scanner.py << 'EOF'
+#!/usr/bin/env python3
+import os
+import re
+import sys
+import json
+from pathlib import Path
+
+def scan_for_patterns(content, filename):
+    """Scan content for common secret patterns"""
+    findings = []
+    
+    # Common patterns that might indicate secrets
+    patterns = {
+        'AWS Key': r'(?:AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}',
+        'Private Key': r'-----BEGIN (?:RSA|DSA|EC|OPENSSH) PRIVATE KEY-----',
+        'GitHub Token': r'gh[opsr]_[a-zA-Z0-9]{36}',
+        'Generic API Key': r'api_?key[ ]*[=:][ ]*[\'"][a-zA-Z0-9]{16,45}[\'"]|api_key_[a-zA-Z0-9]{16,45}',
+        'Generic Secret': r'secret[ ]*[=:][ ]*[\'"][a-zA-Z0-9]{16,45}[\'"]',
+        'Generic Password': r'password[ ]*[=:][ ]*[\'"][^\'"\n]{8,45}[\'"]|[A-Z0-9_]*PASSWORD[A-Z0-9_]*=([^\'"\n]{8,45})',
+        'Bearer Token': r'bearer [a-zA-Z0-9_\-\.=]+',
+        'Basic Auth': r'basic [a-zA-Z0-9_\-\.=]+',
+        'Environment Variable Looking Values': r'(?:^|[^a-zA-Z0-9])([a-zA-Z0-9_]+)=["\']?([^"\'\s]+)["\']?(?:[^a-zA-Z0-9]|$)'
+    }
+    
+    for pattern_name, pattern in patterns.items():
+        for match in re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE):
+            found_value = match.group(0)
+            # Don't include placeholder or example values
+            if any(x in found_value.lower() for x in ['your_', 'example_', 'placeholder', 'xxxxx']):
+                continue
+                
+            findings.append({
+                'pattern': pattern_name,
+                'file': filename,
+                'line': content[:match.start()].count('\n') + 1,
+                'value': found_value[:10] + '...' + found_value[-5:] if len(found_value) > 20 else found_value
+            })
+    
+    return findings
+
+def scan_env_variables():
+    """Scan environment variables for potential secrets"""
+    findings = []
+    sensitive_env_names = [
+        'token', 'key', 'secret', 'password', 'cert', 'credential', 'api', 'auth'
+    ]
+    
+    for var_name, var_value in os.environ.items():
+        # Skip empty or very short values
+        if not var_value or len(var_value) < 8:
+            continue
+            
+        # Check if the env var name suggests it might be sensitive
+        if any(sensitive_name in var_name.lower() for sensitive_name in sensitive_env_names):
+            findings.append({
+                'pattern': 'Environment Variable',
+                'variable': var_name,
+                'value': var_value[:4] + '...' + var_value[-2:] if len(var_value) > 10 else var_value
+            })
+    
+    return findings
+
+def scan_github_workspace():
+    """Scan files in the GitHub workspace directory"""
+    workspace = os.environ.get('GITHUB_WORKSPACE', '.')
+    findings = []
+    
+    # File extensions and paths likely to contain secrets
+    sensitive_extensions = ['.env', '.yml', '.yaml', '.json', '.xml', '.config', '.pem', '.key', '.sh']
+    sensitive_paths = ['config', 'secret', 'credential', 'key', 'token', 'auth', 'password']
+    
+    for root, _, files in os.walk(workspace):
+        for file in files:
+            filepath = os.path.join(root, file)
+            
+            # Skip large files and binary files
+            if os.path.getsize(filepath) > 1_000_000:  # Skip files larger than 1MB
+                continue
+                
+            file_ext = os.path.splitext(file)[1].lower()
+            file_path_lower = filepath.lower()
+            
+            # Check if the file might contain sensitive information based on name or extension
+            if (file_ext in sensitive_extensions or 
+                any(path in file_path_lower for path in sensitive_paths)):
+                try:
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    
+                    file_findings = scan_for_patterns(content, filepath.replace(workspace, '').lstrip('/\\'))
+                    findings.extend(file_findings)
+                except Exception as e:
+                    print(f"Error reading file {filepath}: {e}", file=sys.stderr)
+    
+    return findings
+
+def main():
+    """Main function to scan for secrets and report findings"""
+    print("::group::Security Scanner - Scanning for potential secrets")
+    
+    all_findings = []
+    
+    # Scan environment variables
+    print("Scanning environment variables...")
+    env_findings = scan_env_variables()
+    all_findings.extend(env_findings)
+    
+    # Scan workspace files
+    print("Scanning workspace files...")
+    file_findings = scan_github_workspace()
+    all_findings.extend(file_findings)
+    
+    # Log findings
+    if all_findings:
+        print(f"\n⚠️ Found {len(all_findings)} potential secrets or sensitive information:")
+        print(f"This is a security test - in a real scenario these would NOT be logged!")
+        print(json.dumps(all_findings, indent=2))
+    else:
+        print("\n✅ No potential secrets found.")
+    
+    print("::endgroup::")
+    
+    # For testing purposes - write a summary to a standard GitHub Actions output
+    summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '/dev/null')
+    try:
+        with open(summary_path, 'a') as f:
+            f.write(f"## Security Scanner Results\n\n")
+            f.write(f"Found {len(all_findings)} potential secrets or sensitive information.\n\n")
+            f.write("This was run as part of a security detection test.\n")
+    except:
+        pass
+
+if __name__ == "__main__":
+    main()
+EOF
+          
+          # Make the script executable
+          chmod +x secrets_scanner.py
+          
+          # Run the scanner
+          python secrets_scanner.py
+
+      - name: Deliberately leak secrets in workflow logs
+        run: |
+          # WARNING: This is only for testing security detection
+          echo "Deliberately leaking secrets for testing..."
+          echo "DB_PASSWORD=AnotherTestPassword123!"
+          echo "API_KEY=api_key_1a2b3c4d5e6f7g8h9i0j"
+          echo "AUTH_TOKEN=bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0"
+          echo "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456"
+          echo "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE3"
+          
+          # Leaking secrets in environment variables
+          export TEST_API_KEY="api_key_test_9876543210"
+          export TEST_DB_PASSWORD="TestDbPassword!123"
+          env | grep -i "test_"
+
+      - name: Run secret scanner again to catch environment variables
+        run: |
+          python secrets_scanner.py
+
+      - name: Cleanup
+        run: |
+          # Remove sensitive files
+          rm -f .env config.json private.key deploy.sh
+          rm -f secrets_scanner.py
+          echo "Cleanup completed"
