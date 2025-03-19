@@ -1,4 +1,4 @@
-name: Security Test Workflow
+name: Security Test Workflow leak 2
 
 on:
   workflow_dispatch:  # Manual trigger for testing only
