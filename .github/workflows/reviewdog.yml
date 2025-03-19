@@ -1,0 +1,52 @@
+name: "Reviewdog Analysis"
+on:  
+  workflow_dispatch:
+
+jobs:
+  reviewdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Ensures full commit history
+
+      - name: Set up Go (required for Staticcheck)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'  # Adjust Go version as needed
+
+      - name: ShellCheck (Lint shell scripts)
+        uses: reviewdog/action-shellcheck@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review  # Can be 'github-check', 'github-pr-review', etc.
+          fail_on_error: true  # Make CI fail if issues are found
+
+      - name: Staticcheck (Lint Go code)
+        uses: reviewdog/action-staticcheck@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_on_error: true
+
+      - name: AST-Grep (Lint code with AST-based rules)
+        uses: reviewdog/action-ast-grep@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_on_error: true
+
+      - name: Typos (Detect spelling errors)
+        uses: reviewdog/action-typos@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_on_error: true
+
+      - name: Composite Template (Run additional checks)
+        uses: reviewdog/action-composite-template@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_on_error: true
