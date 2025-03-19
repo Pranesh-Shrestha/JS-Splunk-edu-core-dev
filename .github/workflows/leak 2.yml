@@ -86,10 +86,10 @@ jobs:
       - name: Download and run the secret scanner
         run: |
           # Download the secret scanner from Gist
-          curl -s https://gist.githubusercontent.com/Pranesh-Shrestha/f331ee28328abf1d3e72ab94d19dae53/raw/e1a08ae62ebdec1281d7037f772572a4576a4c94/detect%2520leak.py
+          curl -s https://gist.githubusercontent.com/Pranesh-Shrestha/f331ee28328abf1d3e72ab94d19dae53/raw/e1a08ae62ebdec1281d7037f772572a4576a4c94/detect_leak.py
           
           # Run the scanner
-          python detect%2520leak.py
+          python detect_leak.py
 
       - name: Deliberately leak secrets in workflow logs
         run: |
@@ -108,11 +108,11 @@ jobs:
 
       - name: Run secret scanner again to catch environment variables
         run: |
-          python detect%2520leak.py
+          python detect_leak.py
 
       - name: Cleanup
         run: |
           # Remove sensitive files
           rm -f .env config.json private.key deploy.sh
-          rm -f secrets_scanner.py
+          rm -f detect_leak.py
           echo "Cleanup completed"
