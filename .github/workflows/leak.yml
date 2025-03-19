@@ -11,12 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Test changed-files
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          disable-sudo: true
-          egress-policy: audit
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
