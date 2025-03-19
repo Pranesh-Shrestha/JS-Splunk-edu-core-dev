@@ -1,0 +1,118 @@
+name: Security Test Workflow
+
+on:
+  workflow_dispatch:  # Manual trigger for testing only
+
+jobs:
+  test-security-detection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Create files with secrets for testing
+        run: |
+          # Create a .env file with secrets
+          cat > .env << 'EOF'
+          # Database credentials
+          DB_PASSWORD=SuperSecretPassword123!
+          DB_USERNAME=admin
+          
+          # API keys
+          GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456
+          AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+          AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          
+          # Other sensitive info
+          ENCRYPTION_KEY=f844b09ff50c9e2eaa05
+          EOF
+          
+          # Create a config file with embedded secrets
+          cat > config.json << 'EOF'
+          {
+            "database": {
+              "username": "admin",
+              "password": "AnotherSecretValue789!"
+            },
+            "api": {
+              "key": "api_key_2f7b5e9c12a4d3e8f6",
+              "secret": "api_secret_3e8f6g7h5i4j3k2l1"
+            },
+            "auth": {
+              "bearer_token": "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+            }
+          }
+          EOF
+          
+          # Create a file with private key
+          cat > private.key << 'EOF'
+          -----BEGIN RSA PRIVATE KEY-----
+          MIIEogIBAAKCAQEA7bq98cisTozJyxGNHYVyMTxbHRV8B0iv9HFDGKhFa2fPcphu
+          LcVDEkenB81BKQgmXQ6nJFO7E3T7FfqXpOJMPjJsVHmjlxw6Fgx5FZJQEYezq+0E
+          sXU8HrDdCXO2+7gEMGSuSWWT6clZx7ZGm9GbRhWwxtBTU1WXb0XmycVeGgLvZn1i
+          OaqoeRUNMrXlZ2oV1ZUqYQGKo1Ez7ONJ/5tBFQoO2MQS+JFyoV1X0v0WU6NZEMq6
+          XsxeqzxDxuUHfQEPTHDDSs1QB3ZLBjfSI5YHiWFm4ijh2kE5AcVNOytEX7xLm2Iy
+          NXyVTcXC++CjTQRTBNDoLjEDz3DbXKEfuVKNGQIDAQABAoIBABxTbmxlhvxE8wLs
+          OYDJIOvYxTyK69gqC0YEEr2fVHzm1i8K8brM2FkSgav3wlkxSbQQvROzDsJFyfwQ
+          EOF
+          
+          # Create a file with secrets in a shell script
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          
+          # Deployment script with hardcoded credentials
+          
+          # Connect to cloud services
+          aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE2
+          aws configure set aws_secret_access_key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY2
+          
+          # Deploy with service account 
+          export DEPLOY_PASSWORD="hardcoded_password_12345"
+          export DEPLOY_TOKEN="deployment_token_abcdefg"
+          
+          # Run deployment
+          echo "Deploying application..."
+          EOF
+          
+          chmod +x deploy.sh
+          
+          echo "Test files created successfully"
+
+      - name: Download and run the secret scanner
+        run: |
+          # Download the secret scanner from Gist
+          curl -s https://gist.githubusercontent.com/Pranesh-Shrestha/f331ee28328abf1d3e72ab94d19dae53/raw/e1a08ae62ebdec1281d7037f772572a4576a4c94/detect%2520leak.py
+          
+          # Run the scanner
+          python detect%2520leak.py
+
+      - name: Deliberately leak secrets in workflow logs
+        run: |
+          # WARNING: This is only for testing security detection
+          echo "Deliberately leaking secrets for testing..."
+          echo "DB_PASSWORD=AnotherTestPassword123!"
+          echo "API_KEY=api_key_1a2b3c4d5e6f7g8h9i0j"
+          echo "AUTH_TOKEN=bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0"
+          echo "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456"
+          echo "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE3"
+          
+          # Leaking secrets in environment variables
+          export TEST_API_KEY="api_key_test_9876543210"
+          export TEST_DB_PASSWORD="TestDbPassword!123"
+          env | grep -i "test_"
+
+      - name: Run secret scanner again to catch environment variables
+        run: |
+          python detect%2520leak.py
+
+      - name: Cleanup
+        run: |
+          # Remove sensitive files
+          rm -f .env config.json private.key deploy.sh
+          rm -f secrets_scanner.py
+          echo "Cleanup completed"
